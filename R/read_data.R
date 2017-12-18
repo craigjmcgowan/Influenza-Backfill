@@ -1,5 +1,4 @@
 library(tidyverse)
-library(stringr)
 
 # User defined functions ------------------------------------------------------
 
@@ -28,7 +27,7 @@ read_past_ILI <- function(path) {
 # Read in 15/16 and 16/17 ILI from weekly CSVs
 read_recent_ILI <- function(directory, year) {
   
-  if (!(year %in% c(2015, 2016))) stop("Year must be one of 2015 or 2016")
+  if (!(year %in% c(2015, 2016, 2017))) stop("Year must be between 2015-2017")
   
   # List to store output in
   temp_list <- list()
@@ -54,7 +53,6 @@ read_recent_ILI <- function(directory, year) {
     
     these_data <- these_data %>%
       mutate(release_week = as.numeric(substr(str_extract(files[i], "wk[0-9]{2}"), 3, 4)),
-             season = season,
              region = if_else(region == "X", "US National", 
                               paste("HHS", region)))
     
@@ -62,9 +60,11 @@ read_recent_ILI <- function(directory, year) {
   }
   
   season_data <- bind_rows(temp_list) %>%
-    mutate(final_week = 28) %>%
+    mutate(final_week = 28,
+           indicator = ifelse(release_week == final_week, "final", "initial")) %>%
     rowwise() %>%
-    filter(release_week %in% c(week, final_week))
+    filter(release_week %in% c(week, final_week)) %>%
+    select(-release_week, -final_week)
   
   past_ILI[[season]] <<- season_data
   
