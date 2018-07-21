@@ -1,90 +1,35 @@
 library(tidyverse)
+library(MMWRweek)
 
-# User defined functions ------------------------------------------------------
+source("R/EpiDataAPI.R")
 
-# Read in 09/10 through 14/15 ILI from EPI website
-read_past_ILI <- function(path) {
+# Helper functions ----------------------------------------
+# Function to deal with missing fields in Epidata objects
+null_to_na <- function(x) ifelse(is.null(x), NA, x)
 
-  season <- paste0(substr(path, 10, 13), "/", substr(path, 15, 18))
- 
-  these_data <- read_csv(path) %>%
-    set_names(tolower(names(.))) %>%
-    select(release_week, region, week, wili = perc_weighted_ili) %>%
-    mutate(week = as.numeric(substr(week, 5, 6)),
-           region = if_else(region == "National", "US National",
-                            paste("HHS", region)),
-           release_week = as.numeric(str_extract(release_week, "[0-9]{2}$")),
-           final_week = ifelse(last(week) > 28, 28, last(week)),
-           indicator = ifelse(release_week == final_week, "final", "initial")) %>%
-    rowwise() %>%
-    filter(release_week %in% c(week, final_week)) %>%
-    select(-release_week, -final_week)
-  
-  past_ILI[[season]] <<- these_data
-
+# Pull initial ILINet values between a range
+initial_ili <- function(start, stop) {
+  Epidata$fluview(regions = list("nat", "hhs1", "hhs2", "hhs3",
+                                 "hhs4", "hhs5", "hhs6", "hhs7",
+                                 "hhs8", "hhs9", "hhs10"),
+                  epiweeks = Epidata$range(start, stop),
+                  lag = 0)$epidata %>%
+    modify_depth(2, null_to_na) %>%
+    bind_rows() %>%
+    mutate(season = paste0(substr(start, 1, 4), "-", 
+                           substr(stop, 1, 4)))
 }
 
-# Read in 15/16 and 16/17 ILI from weekly CSVs
-read_recent_ILI <- function(directory, year) {
-  
-  if (!(year %in% c(2015, 2016, 2017))) stop("Year must be between 2015-2017")
-  
-  # List to store output in
-  temp_list <- list()
-  
-  files <- list.files(directory, pattern = "*.csv") 
-  season <- paste0(year, "/", year + 1)
-  
-  
-  for (i in seq_along(files)){
-  
-    these_data <- read_csv(paste0(directory, "/", files[i]))
-    location <- str_extract(files[i], "_([^_]*)_")
+# Pull in initial ILINet values --------------------
+initial_1011 <- initial_ili(201040, 201139)
+initial_1112 <- initial_ili(201140, 201239)
+initial_1213 <- initial_ili(201240, 201339) 
+initial_1314 <- initial_ili(201340, 201439) 
+initial_1415 <- initial_ili(201440, 201539) 
+initial_1516 <- initial_ili(201540, 201639)
+initial_1617 <- initial_ili(201640, 201739) 
+initial_1718 <- initial_ili(201740, 201839) 
 
-    if (year == 2015) {
-      these_data <- these_data %>%
-        select(region = REGION, week = WEEK, 
-               wili = `X..WEIGHTED.ILI`)
-    } else {
-      these_data <- these_data %>%
-        select(region = REGION, week = WEEK,
-               wili = `% WEIGHTED ILI`)
-    }
-    
-    these_data <- these_data %>%
-      mutate(release_week = as.numeric(substr(str_extract(files[i], "wk[0-9]{2}"), 3, 4)),
-             region = if_else(region == "X", "US National", 
-                              paste("HHS", region)))
-    
-    temp_list[[i]] <- these_data
-  }
-  
-  season_data <- bind_rows(temp_list) %>%
-    mutate(final_week = 28,
-           indicator = ifelse(release_week == final_week, "final", "initial")) %>%
-    rowwise() %>%
-    filter(release_week %in% c(week, final_week)) %>%
-    select(-release_week, -final_week)
-  
-  past_ILI[[season]] <<- season_data
-  
-}
-
-# Read in past data -----------------------------------------------------------
-
-# 2009/2010 to 2013/2014 data
-files <- list.files("Data", pattern = "*.csv")
-path <- paste0("Data/", files[1])
-
-past_ILI <- list()
-
-for (i in seq_along(files)) {
-  read_past_ILI(path = paste0("Data/", files[i]))
-}
-
-# 2015/2016 and 2016/2017
-read_recent_ILI("../Challenge_2015_16/ILINet", 2015)
-read_recent_ILI("../Challenge_2016_17/ILINet", 2016)
-
-
-
+all_initial_ili <- bind_rows(initial_1011, initial_1112, initial_1213,
+                             initial_1314, initial_1415, initial_1516,
+                             initial_1617, initial_1718)
